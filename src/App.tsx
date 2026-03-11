@@ -16,6 +16,7 @@ import {
   XCircle,
   TerminalSquare,
   ChevronLeft,
+  ChevronRight,
   ChevronDown,
   ChevronUp,
   Settings,
@@ -29,8 +30,40 @@ import {
   Upload,
   Loader2,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  ClipboardList,
+  Calendar,
+  Clock,
+  History,
+  CheckCircle,
+  AlertCircle,
+  Download,
+  ExternalLink,
+  Filter,
+  TrendingUp,
+  AlertTriangle,
+  Info,
+  Activity,
+  ShieldCheck,
+  Cpu,
+  HardDrive,
+  AtSign
 } from 'lucide-react';
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  AreaChart, 
+  Area,
+  BarChart,
+  Bar,
+  Legend,
+  Cell
+} from 'recharts';
 import { GoogleGenAI } from '@google/genai';
 
 // --- Types ---
@@ -116,13 +149,29 @@ const MOCK_CHATS: ChatSession[] = [
       { id: 'm1', sender: 'user', text: 'Can you check the status of the production cluster?', timestamp: '10:00 AM' },
       { id: 'm2', sender: 'ai', text: 'Checking the production cluster... All nodes are healthy. CPU utilization is at 45% and memory is at 60%. No pending pods.', timestamp: '10:01 AM' }
     ]
+  },
+  {
+    id: 'c2',
+    employeeId: '3',
+    messages: [
+      { id: 'm3', sender: 'user', text: 'Scan for security vulnerabilities in the latest image.', timestamp: 'Yesterday' },
+      { id: 'm4', sender: 'ai', text: 'Scanning image... No critical vulnerabilities found. 2 medium and 5 low severity issues detected.', timestamp: 'Yesterday' }
+    ]
+  },
+  {
+    id: 'c3',
+    employeeId: '2',
+    messages: [
+      { id: 'm5', sender: 'user', text: 'Optimize the slow query on the users table.', timestamp: 'Monday' },
+      { id: 'm6', sender: 'ai', text: 'Analyzing query... Suggesting an index on the email column to improve performance.', timestamp: 'Monday' }
+    ]
   }
 ];
 
 // --- Components ---
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'management' | 'chat' | 'config'>('management');
+  const [currentView, setCurrentView] = useState<'management' | 'chat' | 'config' | 'tasks'>('management');
   const [employees, setEmployees] = useState<Employee[]>(MOCK_EMPLOYEES);
   const [configEmployeeId, setConfigEmployeeId] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -165,6 +214,18 @@ export default function App() {
             <MessageSquare className="w-5 h-5 flex-shrink-0" />
             {!isSidebarCollapsed && <span className="ml-3 whitespace-nowrap">数字员工对话</span>}
           </button>
+          <button
+            onClick={() => setCurrentView('tasks')}
+            className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'px-3'} py-2.5 rounded-lg transition-all duration-200 ${
+              currentView === 'tasks' 
+                ? 'bg-blue-600/10 text-blue-400 font-medium' 
+                : 'hover:bg-slate-800/50 hover:text-white'
+            }`}
+            title={isSidebarCollapsed ? "任务管理" : undefined}
+          >
+            <ClipboardList className="w-5 h-5 flex-shrink-0" />
+            {!isSidebarCollapsed && <span className="ml-3 whitespace-nowrap">任务管理</span>}
+          </button>
         </nav>
         <div className={`p-4 border-t border-slate-800/50 flex items-center ${isSidebarCollapsed ? 'justify-center flex-col space-y-2' : 'justify-between'}`}>
           {!isSidebarCollapsed && <span className="text-xs text-slate-500">v1.0.0-beta</span>}
@@ -182,6 +243,7 @@ export default function App() {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {currentView === 'management' && <ManagementView employees={employees} setEmployees={setEmployees} onConfig={handleConfig} />}
         {currentView === 'chat' && <ChatView employees={employees} />}
+        {currentView === 'tasks' && <TaskManagementView />}
         {currentView === 'config' && configEmployeeId && (
           <ConfigView 
             employeeId={configEmployeeId} 
@@ -191,6 +253,734 @@ export default function App() {
           />
         )}
       </main>
+    </div>
+  );
+}
+
+interface Task {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  frequency: string;
+  time: string;
+  lastRun: string;
+  lastResult: string;
+}
+
+interface TaskRecord {
+  id: string;
+  taskName: string;
+  result: string;
+  actualTime: string;
+  duration: string;
+  hasReport: boolean;
+}
+
+// --- Mock Data for Tasks ---
+const MOCK_TASKS: Task[] = [
+  { id: 't1', name: '每日数据库巡检', description: '你是一个资深的数据库运维专家。请对核心业务数据库进行深度巡检。巡检内容必须包括：1. 当前活跃连接数是否接近上限；2. 过去24小时内的慢查询日志分析，找出执行时间最长的TOP 5 SQL；3. 检查主从同步延迟情况；4. 磁盘空间增长趋势预警。请以结构化的报告形式输出巡检结果，并对异常项给出具体的优化建议。', enabled: true, frequency: '每天', time: '02:00', lastRun: '2024-03-10 02:00:05', lastResult: 'success' },
+  { id: 't2', name: 'K8s 节点资源监控', description: '作为K8s集群管理员，请分析当前集群所有节点的资源消耗情况。重点关注：1. CPU和内存使用率超过80%的节点；2. 节点上的Pod分布是否均衡；3. 检查Kubelet和容器运行时的错误日志。请总结集群当前的健康状态，并识别出潜在的性能瓶颈。', enabled: true, frequency: '每小时', time: '每小时 05 分', lastRun: '2024-03-11 03:05:12', lastResult: 'success' },
+  { id: 't3', name: 'SSL 证书过期检查', description: '请扫描公司所有对外服务的域名SSL证书。要求：1. 提取每个证书的到期日期；2. 识别出有效期不足30天的证书；3. 检查证书链是否完整且安全。请列出所有需要更新的域名清单，并按紧急程度排序。', enabled: false, frequency: '每周', time: '周一 09:00', lastRun: '2024-03-04 09:00:22', lastResult: 'warning' },
+  { id: 't4', name: 'Redis 内存碎片清理', description: '定期检查 Redis 内存碎片率，必要时执行清理操作。', enabled: true, frequency: '每天', time: '04:00', lastRun: '2024-03-10 04:00:10', lastResult: 'success' },
+  { id: 't5', name: '日志清理任务', description: '自动清理 30 天前的系统日志，释放磁盘空间。', enabled: true, frequency: '每天', time: '01:00', lastRun: '2024-03-10 01:00:02', lastResult: 'success' },
+  { id: 't6', name: 'API 接口可用性拨测', description: '每 5 分钟对核心业务接口进行一次可用性探测。', enabled: true, frequency: '每小时', time: '每 5 分钟', lastRun: '2024-03-11 03:35:00', lastResult: 'success' },
+  { id: 't7', name: '备份文件完整性校验', description: '对异地备份的数据库文件进行 MD5 校验，确保备份可用。', enabled: true, frequency: '每周', time: '周日 03:00', lastRun: '2024-03-10 03:00:45', lastResult: 'success' },
+  { id: 't8', name: 'Nginx 错误日志分析', description: '分析 Nginx 错误日志，识别潜在的 5xx 错误并告警。', enabled: true, frequency: '每小时', time: '每小时 10 分', lastRun: '2024-03-11 03:10:05', lastResult: 'success' },
+  { id: 't9', name: '磁盘空间预警扫描', description: '扫描所有挂载点的磁盘使用情况，超过 85% 触发告警。', enabled: true, frequency: '每小时', time: '每小时 30 分', lastRun: '2024-03-11 03:30:15', lastResult: 'success' },
+  { id: 't10', name: '安全漏洞扫描', description: '对生产环境进行定期的安全漏洞扫描。', enabled: false, frequency: '每周', time: '周六 23:00', lastRun: '2024-03-09 23:00:00', lastResult: 'success' },
+  { id: 't11', name: '容器镜像更新检查', description: '检查基础镜像是否有安全更新，并生成更新建议。', enabled: true, frequency: '每周', time: '周三 10:00', lastRun: '2024-03-06 10:00:12', lastResult: 'success' },
+  { id: 't12', name: '网络延迟监控', description: '监控跨机房网络延迟，记录抖动情况。', enabled: true, frequency: '每小时', time: '每小时 15 分', lastRun: '2024-03-11 03:15:08', lastResult: 'success' },
+  { id: 't13', name: '僵尸进程清理', description: '扫描并清理系统中的僵尸进程。', enabled: true, frequency: '每天', time: '05:00', lastRun: '2024-03-10 05:00:03', lastResult: 'success' },
+  { id: 't14', name: '数据库索引分析', description: '分析数据库索引使用情况，建议删除冗余索引。', enabled: true, frequency: '每周', time: '周五 02:00', lastRun: '2024-03-08 02:00:15', lastResult: 'success' },
+  { id: 't15', name: '系统负载平衡检查', description: '评估集群负载平衡情况，建议扩缩容。', enabled: true, frequency: '每天', time: '08:00', lastRun: '2024-03-10 08:00:20', lastResult: 'success' }
+];
+
+const MOCK_TASK_RECORDS = [
+  { id: 'r1', taskName: '每日数据库巡检', result: 'success', actualTime: '2024-03-10 02:00:05', duration: '45s', hasReport: true },
+  { id: 'r2', taskName: 'K8s 节点资源监控', result: 'success', actualTime: '2024-03-11 03:05:12', duration: '12s', hasReport: true },
+  { id: 'r3', taskName: '每日数据库巡检', result: 'failure', actualTime: '2024-03-09 02:00:08', duration: '30s', hasReport: false },
+  { id: 'r4', taskName: 'Redis 内存碎片清理', result: 'success', actualTime: '2024-03-10 04:00:10', duration: '1m 20s', hasReport: true },
+  { id: 'r5', taskName: '日志清理任务', result: 'success', actualTime: '2024-03-10 01:00:02', duration: '5m 12s', hasReport: true },
+  { id: 'r6', taskName: 'API 接口可用性拨测', result: 'success', actualTime: '2024-03-11 03:35:00', duration: '2s', hasReport: true },
+  { id: 'r7', taskName: '备份文件完整性校验', result: 'success', actualTime: '2024-03-10 03:00:45', duration: '15m 30s', hasReport: true },
+  { id: 'r8', taskName: 'Nginx 错误日志分析', result: 'success', actualTime: '2024-03-11 03:10:05', duration: '1m 45s', hasReport: true },
+  { id: 'r9', taskName: '磁盘空间预警扫描', result: 'success', actualTime: '2024-03-11 03:30:15', duration: '35s', hasReport: true },
+  { id: 'r10', taskName: '每日数据库巡检', result: 'success', actualTime: '2024-03-08 02:00:04', duration: '42s', hasReport: true },
+  { id: 'r11', taskName: 'K8s 节点资源监控', result: 'success', actualTime: '2024-03-11 02:05:10', duration: '11s', hasReport: true },
+  { id: 'r12', taskName: 'API 接口可用性拨测', result: 'success', actualTime: '2024-03-11 03:30:00', duration: '2s', hasReport: true },
+  { id: 'r13', taskName: '僵尸进程清理', result: 'success', actualTime: '2024-03-10 05:00:03', duration: '5s', hasReport: true },
+  { id: 'r14', taskName: '数据库索引分析', result: 'success', actualTime: '2024-03-08 02:00:15', duration: '3m 10s', hasReport: true },
+  { id: 'r15', taskName: '系统负载平衡检查', result: 'success', actualTime: '2024-03-10 08:00:20', duration: '1m 05s', hasReport: true }
+];
+
+function TaskManagementView() {
+  const [activeTab, setActiveTab] = useState<'list' | 'records'>('list');
+  const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS);
+  
+  // Drawer states
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isCreateMode, setIsCreateMode] = useState(false);
+
+  // Report states
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<TaskRecord | null>(null);
+
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
+  const [frequencyFilter, setFrequencyFilter] = useState('all');
+  const [resultFilter, setResultFilter] = useState('all');
+
+  // Pagination states
+  const [listPage, setListPage] = useState(1);
+  const [recordsPage, setRecordsPage] = useState(1);
+  const pageSize = 10;
+
+  // Record Filter states
+  const [recordSearchTerm, setRecordSearchTerm] = useState('');
+  const [recordResultFilter, setRecordResultFilter] = useState('all');
+
+  const filteredTasks = tasks.filter(task => {
+    const matchesSearch = task.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          task.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || 
+                          (statusFilter === 'enabled' && task.enabled) || 
+                          (statusFilter === 'disabled' && !task.enabled);
+    const matchesFrequency = frequencyFilter === 'all' || task.frequency === frequencyFilter;
+    const matchesResult = resultFilter === 'all' || task.lastResult === resultFilter;
+    
+    return matchesSearch && matchesStatus && matchesFrequency && matchesResult;
+  });
+
+  const paginatedTasks = filteredTasks.slice((listPage - 1) * pageSize, listPage * pageSize);
+  const totalListPages = Math.ceil(filteredTasks.length / pageSize);
+
+  const filteredRecords = MOCK_TASK_RECORDS.filter(record => {
+    const matchesSearch = record.taskName.toLowerCase().includes(recordSearchTerm.toLowerCase());
+    const matchesResult = recordResultFilter === 'all' || record.result === recordResultFilter;
+    return matchesSearch && matchesResult;
+  });
+
+  const paginatedRecords = filteredRecords.slice((recordsPage - 1) * pageSize, recordsPage * pageSize);
+  const totalRecordsPages = Math.ceil(filteredRecords.length / pageSize);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setListPage(1);
+  }, [searchTerm, statusFilter, frequencyFilter, resultFilter]);
+
+  useEffect(() => {
+    setRecordsPage(1);
+  }, [recordSearchTerm, recordResultFilter]);
+
+  const handleViewDetails = (task: Task) => {
+    setSelectedTask(task);
+    setIsEditMode(false);
+    setIsCreateMode(false);
+    setIsDrawerOpen(true);
+  };
+
+  const handleEditTask = (task: Task) => {
+    setSelectedTask(task);
+    setIsEditMode(true);
+    setIsCreateMode(false);
+    setIsDrawerOpen(true);
+  };
+
+  const handleCreateTask = () => {
+    setSelectedTask(null);
+    setIsEditMode(true);
+    setIsCreateMode(true);
+    setIsDrawerOpen(true);
+  };
+
+  const handleSaveTask = (updatedTask: Task) => {
+    if (isCreateMode) {
+      const newTask = {
+        ...updatedTask,
+        id: `t${Date.now()}`,
+        lastRun: '-',
+        lastResult: 'pending'
+      };
+      setTasks([newTask, ...tasks]);
+    } else {
+      setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
+    }
+    setIsDrawerOpen(false);
+  };
+
+  const handleViewHistory = (taskName: string) => {
+    setRecordSearchTerm(taskName);
+    setRecordResultFilter('all');
+    setActiveTab('records');
+  };
+
+  const handleViewReport = (record: TaskRecord) => {
+    setSelectedRecord(record);
+    setIsReportModalOpen(true);
+  };
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden bg-white">
+      {/* Task Drawer */}
+      <TaskDrawer 
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        task={selectedTask}
+        isEditMode={isEditMode}
+        isCreateMode={isCreateMode}
+        onSave={handleSaveTask}
+      />
+
+      {/* Report Modal */}
+      <TaskReportModal 
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        record={selectedRecord}
+      />
+      {/* Header */}
+      <header className="h-16 border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0 bg-white">
+        <h1 className="text-xl font-bold text-slate-800">任务管理</h1>
+        <div className="flex items-center space-x-4">
+          <button 
+            onClick={handleCreateTask}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center shadow-sm"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            新建任务
+          </button>
+        </div>
+      </header>
+
+      {/* Tabs */}
+      <div className="px-8 border-b border-slate-200 bg-white">
+        <div className="flex space-x-8">
+          <button 
+            onClick={() => setActiveTab('list')}
+            className={`py-4 text-sm font-medium border-b-2 transition-colors relative ${
+              activeTab === 'list' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            任务列表
+          </button>
+          <button 
+            onClick={() => setActiveTab('records')}
+            className={`py-4 text-sm font-medium border-b-2 transition-colors relative ${
+              activeTab === 'records' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            任务记录
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-auto p-8">
+        {activeTab === 'list' ? (
+          <div className="space-y-4">
+            {/* Filters */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-wrap items-center gap-4">
+              <div className="relative flex-1 min-w-[240px]">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="搜索任务名称或描述..." 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 rounded-lg text-sm transition-all outline-none"
+                />
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-slate-500 flex items-center">
+                  <Filter className="w-3 h-3 mr-1" /> 筛选:
+                </span>
+                
+                <select 
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as any)}
+                  className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  <option value="all">全部状态</option>
+                  <option value="enabled">已开启</option>
+                  <option value="disabled">已关闭</option>
+                </select>
+
+                <select 
+                  value={frequencyFilter}
+                  onChange={(e) => setFrequencyFilter(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  <option value="all">全部频率</option>
+                  <option value="每天">每天</option>
+                  <option value="每小时">每小时</option>
+                  <option value="每周">每周</option>
+                </select>
+
+                <select 
+                  value={resultFilter}
+                  onChange={(e) => setResultFilter(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  <option value="all">全部结果</option>
+                  <option value="success">成功</option>
+                  <option value="warning">警告</option>
+                  <option value="failure">失败</option>
+                </select>
+                
+                {(searchTerm || statusFilter !== 'all' || frequencyFilter !== 'all' || resultFilter !== 'all') && (
+                  <button 
+                    onClick={() => {
+                      setSearchTerm('');
+                      setStatusFilter('all');
+                      setFrequencyFilter('all');
+                      setResultFilter('all');
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2"
+                  >
+                    重置
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/50 border-b border-slate-200">
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">任务名称</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">任务描述</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">任务开关</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">执行频率</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">执行时间</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">上次执行时间</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">上次执行结果</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {paginatedTasks.length > 0 ? paginatedTasks.map(task => (
+                    <tr key={task.id} className="hover:bg-slate-50/50 transition-colors group">
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-slate-900">{task.name}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-slate-500 max-w-xs truncate" title={task.description}>{task.description}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <button className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${task.enabled ? 'bg-blue-600' : 'bg-slate-200'}`}>
+                          <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${task.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-slate-600">{task.frequency}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-slate-600">{task.time}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-slate-500 font-mono">{task.lastRun}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          task.lastResult === 'success' ? 'bg-emerald-100 text-emerald-700' : 
+                          task.lastResult === 'warning' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
+                        }`}>
+                          {task.lastResult === 'success' ? <CheckCircle className="w-3 h-3 mr-1" /> : <AlertCircle className="w-3 h-3 mr-1" />}
+                          {task.lastResult === 'success' ? '成功' : task.lastResult === 'warning' ? '警告' : '失败'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center space-x-3">
+                          <button 
+                            onClick={() => handleViewDetails(task)}
+                            className="p-1 text-slate-400 hover:text-blue-600 transition-colors" 
+                            title="查看详情"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleEditTask(task)}
+                            className="p-1 text-slate-400 hover:text-blue-600 transition-colors" 
+                            title="修改任务"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleViewHistory(task.name)}
+                            className="p-1 text-slate-400 hover:text-blue-600 transition-colors" 
+                            title="查看巡检记录"
+                          >
+                            <History className="w-4 h-4" />
+                          </button>
+                          <button className="p-1 text-slate-400 hover:text-rose-600 transition-colors" title="删除任务">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
+                        未找到匹配的任务
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination for List */}
+            {totalListPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm">
+                <div className="text-sm text-slate-500">
+                  显示 <span className="font-medium">{(listPage - 1) * pageSize + 1}</span> 到 <span className="font-medium">{Math.min(listPage * pageSize, filteredTasks.length)}</span> 条，共 <span className="font-medium">{filteredTasks.length}</span> 条结果
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button 
+                    onClick={() => setListPage(prev => Math.max(1, prev - 1))}
+                    disabled={listPage === 1}
+                    className={`p-2 rounded-lg border border-slate-200 transition-colors ${listPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  {[...Array(totalListPages)].map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setListPage(i + 1)}
+                      className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                        listPage === i + 1 ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50 border border-slate-200'
+                      }`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                  <button 
+                    onClick={() => setListPage(prev => Math.min(totalListPages, prev + 1))}
+                    disabled={listPage === totalListPages}
+                    className={`p-2 rounded-lg border border-slate-200 transition-colors ${listPage === totalListPages ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Records Filters */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-wrap items-center gap-4">
+              <div className="relative flex-1 min-w-[240px]">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="搜索任务名称..." 
+                  value={recordSearchTerm}
+                  onChange={(e) => setRecordSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 rounded-lg text-sm transition-all outline-none"
+                />
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-slate-500 flex items-center">
+                  <Filter className="w-3 h-3 mr-1" /> 筛选:
+                </span>
+                
+                <select 
+                  value={recordResultFilter}
+                  onChange={(e) => setRecordResultFilter(e.target.value)}
+                  className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  <option value="all">执行结果: 全部</option>
+                  <option value="success">成功</option>
+                  <option value="failure">失败</option>
+                </select>
+
+                {(recordSearchTerm || recordResultFilter !== 'all') && (
+                  <button 
+                    onClick={() => {
+                      setRecordSearchTerm('');
+                      setRecordResultFilter('all');
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2"
+                  >
+                    重置
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/50 border-b border-slate-200">
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">任务名称</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">执行结果</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">实际执行时间</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">巡检时长</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">是否生成报告</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {paginatedRecords.length > 0 ? paginatedRecords.map(record => (
+                    <tr key={record.id} className="hover:bg-slate-50/50 transition-colors group">
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-slate-900">{record.taskName}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        record.result === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                      }`}>
+                        {record.result === 'success' ? <CheckCircle className="w-3 h-3 mr-1" /> : <AlertCircle className="w-3 h-3 mr-1" />}
+                        {record.result === 'success' ? '成功' : '失败'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-slate-500 font-mono">{record.actualTime}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-slate-600">{record.duration}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-slate-600">{record.hasReport ? '是' : '否'}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center space-x-3">
+                        <button 
+                          disabled={!record.hasReport}
+                          onClick={() => handleViewReport(record)}
+                          className={`text-xs font-medium flex items-center ${record.hasReport ? 'text-blue-600 hover:text-blue-800' : 'text-slate-300 cursor-not-allowed'}`}
+                        >
+                          <ExternalLink className="w-3 h-3 mr-1" />
+                          查看报告
+                        </button>
+                        <button 
+                          disabled={!record.hasReport}
+                          className={`text-xs font-medium flex items-center ${record.hasReport ? 'text-blue-600 hover:text-blue-800' : 'text-slate-300 cursor-not-allowed'}`}
+                        >
+                          <Download className="w-3 h-3 mr-1" />
+                          下载报告
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                      未找到匹配的任务记录
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination for Records */}
+          {totalRecordsPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm">
+              <div className="text-sm text-slate-500">
+                显示 <span className="font-medium">{(recordsPage - 1) * pageSize + 1}</span> 到 <span className="font-medium">{Math.min(recordsPage * pageSize, filteredRecords.length)}</span> 条，共 <span className="font-medium">{filteredRecords.length}</span> 条结果
+              </div>
+              <div className="flex items-center space-x-2">
+                <button 
+                  onClick={() => setRecordsPage(prev => Math.max(1, prev - 1))}
+                  disabled={recordsPage === 1}
+                  className={`p-2 rounded-lg border border-slate-200 transition-colors ${recordsPage === 1 ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                {[...Array(totalRecordsPages)].map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setRecordsPage(i + 1)}
+                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                      recordsPage === i + 1 ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50 border border-slate-200'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+                <button 
+                  onClick={() => setRecordsPage(prev => Math.min(totalRecordsPages, prev + 1))}
+                  disabled={recordsPage === totalRecordsPages}
+                  className={`p-2 rounded-lg border border-slate-200 transition-colors ${recordsPage === totalRecordsPages ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TaskDrawer({ 
+  isOpen, 
+  onClose, 
+  task, 
+  isEditMode, 
+  isCreateMode,
+  onSave 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  task: Task | null; 
+  isEditMode: boolean;
+  isCreateMode: boolean;
+  onSave: (task: Task) => void;
+}) {
+  const [editedTask, setEditedTask] = useState<Task | null>(null);
+
+  useEffect(() => {
+    if (isCreateMode) {
+      setEditedTask({
+        id: '',
+        name: '',
+        description: '',
+        enabled: true,
+        frequency: '每天',
+        time: '00:00',
+        lastRun: '-',
+        lastResult: 'pending'
+      });
+    } else {
+      setEditedTask(task);
+    }
+  }, [task, isCreateMode]);
+
+  if (!isOpen || !editedTask) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-hidden">
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose} />
+      <div className="absolute inset-y-0 right-0 w-full max-w-lg bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out translate-x-0">
+        <div className="h-16 border-b border-slate-200 flex items-center justify-between px-6 flex-shrink-0">
+          <h2 className="text-lg font-semibold text-slate-800">
+            {isCreateMode ? '新建任务' : isEditMode ? '修改任务' : '任务详情'}
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+            <X className="w-5 h-5 text-slate-500" />
+          </button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">任务名称</label>
+            {isEditMode ? (
+              <input 
+                type="text" 
+                placeholder="例如：每日数据库巡检"
+                value={editedTask.name}
+                onChange={(e) => setEditedTask({...editedTask, name: e.target.value})}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              />
+            ) : (
+              <div className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-lg text-slate-900 font-medium">{editedTask.name}</div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">任务描述</label>
+            {isEditMode ? (
+              <textarea 
+                rows={8}
+                placeholder="请详细描述任务的执行逻辑或巡检指令..."
+                value={editedTask.description}
+                onChange={(e) => setEditedTask({...editedTask, description: e.target.value})}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all resize-none text-sm leading-relaxed"
+              />
+            ) : (
+              <div className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-lg text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">{editedTask.description}</div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">执行频率</label>
+              {isEditMode ? (
+                <select 
+                  value={editedTask.frequency}
+                  onChange={(e) => setEditedTask({...editedTask, frequency: e.target.value})}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                >
+                  <option value="每天">每天</option>
+                  <option value="每小时">每小时</option>
+                  <option value="每周">每周</option>
+                </select>
+              ) : (
+                <div className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-lg text-slate-600">{editedTask.frequency}</div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">执行时间</label>
+              {isEditMode ? (
+                <input 
+                  type="text" 
+                  placeholder="例如：02:00 或 每 5 分钟"
+                  value={editedTask.time}
+                  onChange={(e) => setEditedTask({...editedTask, time: e.target.value})}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                />
+              ) : (
+                <div className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-lg text-slate-600">{editedTask.time}</div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">任务状态</label>
+            <div className="flex items-center space-x-3">
+              <button 
+                disabled={!isEditMode}
+                onClick={() => setEditedTask({...editedTask, enabled: !editedTask.enabled})}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${editedTask.enabled ? 'bg-blue-600' : 'bg-slate-200'} ${!isEditMode && 'opacity-70 cursor-not-allowed'}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editedTask.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+              <span className="text-sm text-slate-600">{editedTask.enabled ? '已开启' : '已关闭'}</span>
+            </div>
+          </div>
+
+          {!isEditMode && (
+            <div className="pt-6 border-t border-slate-100 space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-500">上次执行时间</span>
+                <span className="text-sm font-mono text-slate-700">{editedTask.lastRun}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-500">上次执行结果</span>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  editedTask.lastResult === 'success' ? 'bg-emerald-100 text-emerald-700' : 
+                  editedTask.lastResult === 'warning' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
+                }`}>
+                  {editedTask.lastResult === 'success' ? '成功' : editedTask.lastResult === 'warning' ? '警告' : '失败'}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="h-20 border-t border-slate-200 flex items-center justify-end px-6 space-x-3 flex-shrink-0 bg-slate-50/50">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors">
+            取消
+          </button>
+          {isEditMode && (
+            <button 
+              onClick={() => onSave(editedTask)}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+            >
+              {isCreateMode ? '创建任务' : '保存修改'}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -452,6 +1242,9 @@ function ChatView({ employees }: { employees: Employee[] }) {
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const [isSelectingEmployee, setIsSelectingEmployee] = useState(false);
+  const [isAtMenuOpen, setIsAtMenuOpen] = useState(false);
+
   const activeChat = chats.find(c => c.id === activeChatId);
   const activeEmployee = employees.find(e => e.id === activeChat?.employeeId);
 
@@ -518,13 +1311,14 @@ function ChatView({ employees }: { employees: Employee[] }) {
       setChats([...chats, newChat]);
       setActiveChatId(newChat.id);
     }
+    setIsSelectingEmployee(false);
   };
 
   return (
     <div className="flex-1 flex h-full overflow-hidden bg-white">
       {/* Chat Sidebar */}
       <div className="w-72 border-r border-slate-200 flex flex-col bg-slate-50 flex-shrink-0">
-        <div className="p-4 border-b border-slate-200">
+        <div className="p-4 border-b border-slate-200 space-y-3">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
@@ -533,35 +1327,46 @@ function ChatView({ employees }: { employees: Employee[] }) {
               className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
             />
           </div>
+          <button 
+            onClick={() => setIsSelectingEmployee(!isSelectingEmployee)}
+            className="w-full flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium text-sm"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            开启新对话
+          </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-1">
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-2 mt-2">在线员工</div>
-          {employees.filter(e => e.status === 'online').map(emp => (
-            <button
-              key={emp.id}
-              onClick={() => startNewChat(emp.id)}
-              className={`w-full flex items-center p-2.5 rounded-lg transition-colors text-left ${
-                activeChat?.employeeId === emp.id ? 'bg-blue-50 border border-blue-100' : 'hover:bg-slate-200/50 border border-transparent'
-              }`}
-            >
-              <div className="relative flex-shrink-0">
-                {emp.avatar.startsWith('data:image/') || emp.avatar.startsWith('http') ? (
-                  <img src={emp.avatar} alt={emp.name} className="w-8 h-8 rounded-full object-cover border border-slate-200" />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm border border-blue-200">
-                    {emp.avatar}
+        <div className="flex-1 overflow-y-auto p-3 space-y-1 relative">
+          {isSelectingEmployee && (
+            <div className="absolute inset-x-3 top-3 z-20 bg-white border border-slate-200 rounded-xl shadow-xl p-2 space-y-1 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center justify-between px-2 py-1 mb-1">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">选择员工</span>
+                <button onClick={() => setIsSelectingEmployee(false)} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+              {employees.map(emp => (
+                <button
+                  key={emp.id}
+                  onClick={() => startNewChat(emp.id)}
+                  className="w-full flex items-center p-2 rounded-lg hover:bg-slate-50 transition-colors text-left"
+                >
+                  <div className="flex-shrink-0">
+                    {emp.avatar.startsWith('data:image/') || emp.avatar.startsWith('http') ? (
+                      <img src={emp.avatar} alt={emp.name} className="w-7 h-7 rounded-full object-cover border border-slate-200" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs border border-blue-200">
+                        {emp.avatar}
+                      </div>
+                    )}
                   </div>
-                )}
-                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></div>
-              </div>
-              <div className="ml-3 flex-1 overflow-hidden">
-                <div className="text-sm font-medium text-slate-800 truncate">{emp.name}</div>
-                <div className="text-xs text-slate-500 truncate">点击开始对话</div>
-              </div>
-            </button>
-          ))}
-          
-          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-2 mt-6">最近对话</div>
+                  <div className="ml-2 flex-1 overflow-hidden">
+                    <div className="text-sm font-medium text-slate-800 truncate">{emp.name}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-2 mt-2">最近对话</div>
           {chats.map(chat => {
             const emp = employees.find(e => e.id === chat.employeeId);
             if (!emp) return null;
@@ -575,7 +1380,7 @@ function ChatView({ employees }: { employees: Employee[] }) {
               >
                 <MessageSquare className={`w-4 h-4 mr-3 ${activeChatId === chat.id ? 'text-blue-500' : 'text-slate-400'}`} />
                 <div className="flex-1 overflow-hidden">
-                  <div className="text-sm font-medium text-slate-800 truncate">与 {emp.name} 的对话</div>
+                  <div className="text-sm font-medium text-slate-800 truncate">执行的任务概括</div>
                   <div className="text-xs text-slate-500 truncate">
                     {chat.messages.length > 0 ? chat.messages[chat.messages.length - 1].text : '暂无消息'}
                   </div>
@@ -651,12 +1456,52 @@ function ChatView({ employees }: { employees: Employee[] }) {
             {/* Input Area */}
             <div className="p-4 bg-white border-t border-slate-100">
               <div className="max-w-4xl mx-auto relative flex items-end bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all shadow-sm">
+                <div className="relative">
+                  <button 
+                    onClick={() => setIsAtMenuOpen(!isAtMenuOpen)}
+                    className="p-4 text-slate-400 hover:text-blue-600 transition-colors"
+                    title="提及数字员工"
+                  >
+                    <AtSign className="w-5 h-5" />
+                  </button>
+                  
+                  {isAtMenuOpen && (
+                    <div className="absolute bottom-full left-0 mb-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl p-2 space-y-1 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                      <div className="px-2 py-1 mb-1">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">提及员工</span>
+                      </div>
+                      {employees.map(emp => (
+                        <button
+                          key={emp.id}
+                          onClick={() => {
+                            setInputText(prev => prev + `@${emp.name} `);
+                            setIsAtMenuOpen(false);
+                          }}
+                          className="w-full flex items-center p-2 rounded-lg hover:bg-slate-50 transition-colors text-left"
+                        >
+                          <div className="flex-shrink-0">
+                            {emp.avatar.startsWith('data:image/') || emp.avatar.startsWith('http') ? (
+                              <img src={emp.avatar} alt={emp.name} className="w-6 h-6 rounded-full object-cover border border-slate-200" />
+                            ) : (
+                              <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-[10px] border border-blue-200">
+                                {emp.avatar}
+                              </div>
+                            )}
+                          </div>
+                          <div className="ml-2 flex-1 overflow-hidden">
+                            <div className="text-sm font-medium text-slate-800 truncate">{emp.name}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <textarea
                   value={inputText}
                   onChange={e => setInputText(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder={`发送消息给 ${activeEmployee.name}...`}
-                  className="w-full max-h-32 min-h-[56px] py-4 pl-4 pr-12 bg-transparent resize-none focus:outline-none text-[15px] text-slate-800"
+                  className="w-full max-h-32 min-h-[56px] py-4 pl-0 pr-12 bg-transparent resize-none focus:outline-none text-[15px] text-slate-800"
                   rows={1}
                 />
                 <div className="absolute right-2 bottom-2">
@@ -1217,6 +2062,229 @@ ${persona}`;
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// --- Task Report Modal Component ---
+function TaskReportModal({ 
+  isOpen, 
+  onClose, 
+  record 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  record: TaskRecord | null;
+}) {
+  if (!isOpen || !record) return null;
+
+  // Mock data for the report
+  const cpuData = [
+    { time: '00:00', value: 45 },
+    { time: '00:30', value: 52 },
+    { time: '01:00', value: 48 },
+    { time: '01:30', value: 61 },
+    { time: '02:00', value: 55 },
+    { time: '02:30', value: 42 },
+    { time: '03:00', value: 38 },
+  ];
+
+  const diskData = [
+    { name: '已使用', value: 78, color: '#3b82f6' },
+    { name: '未使用', value: 22, color: '#e2e8f0' },
+  ];
+
+  const slowQueries = [
+    { id: 1, sql: 'SELECT * FROM orders WHERE user_id = ? AND status = ? ORDER BY created_at DESC LIMIT 100', time: '2.4s', count: 124 },
+    { id: 2, sql: 'UPDATE inventory SET stock = stock - 1 WHERE product_id = ?', time: '1.8s', count: 850 },
+    { id: 3, sql: 'SELECT SUM(amount) FROM transactions WHERE merchant_id = ? AND date > ?', time: '1.5s', count: 45 },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-5xl max-h-[90vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+        {/* Header */}
+        <div className="h-16 border-b border-slate-200 flex items-center justify-between px-6 flex-shrink-0 bg-slate-50/50">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-800">巡检报告：{record.taskName}</h2>
+              <p className="text-xs text-slate-500">执行时间：{record.actualTime} · 巡检时长：{record.duration}</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button className="flex items-center px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+              <Download className="w-4 h-4 mr-2" />
+              导出 PDF
+            </button>
+            <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+              <X className="w-5 h-5 text-slate-500" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-slate-50/30">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-slate-500">巡检状态</span>
+                <CheckCircle className="w-4 h-4 text-emerald-500" />
+              </div>
+              <div className="text-xl font-bold text-slate-800">正常</div>
+              <div className="text-xs text-emerald-600 mt-1">所有指标均在阈值内</div>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-slate-500">活跃连接</span>
+                <Activity className="w-4 h-4 text-blue-500" />
+              </div>
+              <div className="text-xl font-bold text-slate-800">245 / 1000</div>
+              <div className="text-xs text-slate-500 mt-1">利用率 24.5%</div>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-slate-500">CPU 使用率</span>
+                <Cpu className="w-4 h-4 text-amber-500" />
+              </div>
+              <div className="text-xl font-bold text-slate-800">42.8%</div>
+              <div className="text-xs text-amber-600 mt-1">较昨日上升 5%</div>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-slate-500">安全风险</span>
+                <ShieldCheck className="w-4 h-4 text-emerald-500" />
+              </div>
+              <div className="text-xl font-bold text-slate-800">无风险</div>
+              <div className="text-xs text-emerald-600 mt-1">已通过 12 项安全扫描</div>
+            </div>
+          </div>
+
+          {/* Charts Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-bold text-slate-800 flex items-center">
+                  <TrendingUp className="w-4 h-4 mr-2 text-blue-500" />
+                  资源负载趋势 (24h)
+                </h3>
+                <select className="text-xs border-none bg-slate-100 rounded px-2 py-1 outline-none">
+                  <option>CPU 使用率</option>
+                  <option>内存使用率</option>
+                </select>
+              </div>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={cpuData}>
+                    <defs>
+                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#94a3b8'}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#94a3b8'}} />
+                    <Tooltip 
+                      contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                    />
+                    <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+              <h3 className="font-bold text-slate-800 flex items-center mb-6">
+                <HardDrive className="w-4 h-4 mr-2 text-indigo-500" />
+                存储空间分布
+              </h3>
+              <div className="h-64 w-full flex items-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={diskData} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} width={60} />
+                    <Tooltip cursor={{fill: 'transparent'}} />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={32}>
+                      {diskData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          {/* Table Section */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800 flex items-center">
+                <AlertTriangle className="w-4 h-4 mr-2 text-amber-500" />
+                慢查询分析 (TOP 3)
+              </h3>
+            </div>
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/50">
+                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">SQL 语句</th>
+                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">平均耗时</th>
+                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">执行次数</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {slowQueries.map(q => (
+                  <tr key={q.id} className="hover:bg-slate-50/30 transition-colors">
+                    <td className="px-6 py-4">
+                      <code className="text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded block max-w-md truncate" title={q.sql}>
+                        {q.sql}
+                      </code>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600 font-medium">{q.time}</td>
+                    <td className="px-6 py-4 text-sm text-slate-600">{q.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Conclusion & Suggestions */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-emerald-50/50 p-6 rounded-2xl border border-emerald-100">
+              <h3 className="font-bold text-emerald-800 flex items-center mb-4">
+                <CheckCircle className="w-4 h-4 mr-2" />
+                巡检结论
+              </h3>
+              <p className="text-sm text-emerald-700 leading-relaxed">
+                当前数据库运行状态良好，核心指标（连接数、IOPS、内存命中率）均处于安全范围内。主从同步延迟稳定在 10ms 以内，未发现明显的性能瓶颈。
+              </p>
+            </div>
+            <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100">
+              <h3 className="font-bold text-blue-800 flex items-center mb-4">
+                <Info className="w-4 h-4 mr-2" />
+                建议操作
+              </h3>
+              <ul className="text-sm text-blue-700 space-y-2 list-disc list-inside">
+                <li>针对 TOP 1 的慢查询建议增加复合索引以优化性能。</li>
+                <li>磁盘使用率已达 78%，建议在下周进行一次历史数据归档。</li>
+                <li>建议在业务低峰期对 `inventory` 表进行碎片整理。</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="h-16 border-t border-slate-200 flex items-center justify-end px-6 flex-shrink-0 bg-slate-50/50">
+          <button onClick={onClose} className="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium rounded-lg transition-colors shadow-sm">
+            关闭报告
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
