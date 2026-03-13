@@ -35,6 +35,7 @@ import {
   Calendar,
   Clock,
   History,
+  Play,
   CheckCircle,
   AlertCircle,
   Download,
@@ -65,6 +66,7 @@ import {
   Cell
 } from 'recharts';
 import { GoogleGenAI } from '@google/genai';
+import Markdown from 'react-markdown';
 
 // --- Types ---
 type Skill = string;
@@ -184,18 +186,18 @@ export default function App() {
   return (
     <div className="flex h-screen w-full bg-slate-50 overflow-hidden font-sans text-slate-900">
       {/* Sidebar */}
-      <aside className={`${isSidebarCollapsed ? 'w-16' : 'w-64'} bg-[#0B1120] text-slate-300 flex flex-col shadow-xl z-10 flex-shrink-0 transition-all duration-300`}>
-        <div className={`h-16 flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'px-6'} border-b border-slate-800/50`}>
-          <TerminalSquare className="w-6 h-6 text-blue-500 flex-shrink-0" />
-          {!isSidebarCollapsed && <span className="text-lg font-semibold text-white tracking-wide ml-3 whitespace-nowrap overflow-hidden">opsRobot Center</span>}
+      <aside className={`${isSidebarCollapsed ? 'w-16' : 'w-64'} bg-white text-slate-600 flex flex-col border-r border-slate-200 z-10 flex-shrink-0 transition-all duration-300`}>
+        <div className={`h-16 flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'px-6'} border-b border-slate-200`}>
+          <TerminalSquare className="w-6 h-6 text-blue-600 flex-shrink-0" />
+          {!isSidebarCollapsed && <span className="text-lg font-bold text-slate-900 tracking-tight ml-3 whitespace-nowrap overflow-hidden">opsRobot Center</span>}
         </div>
         <nav className="flex-1 py-6 px-3 space-y-2 overflow-hidden">
           <button
             onClick={() => setCurrentView('management')}
             className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'px-3'} py-2.5 rounded-lg transition-all duration-200 ${
               currentView === 'management' || currentView === 'config'
-                ? 'bg-blue-600/10 text-blue-400 font-medium' 
-                : 'hover:bg-slate-800/50 hover:text-white'
+                ? 'bg-blue-50 text-blue-600 font-semibold' 
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
             }`}
             title={isSidebarCollapsed ? "数字员工管理" : undefined}
           >
@@ -206,8 +208,8 @@ export default function App() {
             onClick={() => setCurrentView('chat')}
             className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'px-3'} py-2.5 rounded-lg transition-all duration-200 ${
               currentView === 'chat' 
-                ? 'bg-blue-600/10 text-blue-400 font-medium' 
-                : 'hover:bg-slate-800/50 hover:text-white'
+                ? 'bg-blue-50 text-blue-600 font-semibold' 
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
             }`}
             title={isSidebarCollapsed ? "数字员工对话" : undefined}
           >
@@ -218,8 +220,8 @@ export default function App() {
             onClick={() => setCurrentView('tasks')}
             className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'px-3'} py-2.5 rounded-lg transition-all duration-200 ${
               currentView === 'tasks' 
-                ? 'bg-blue-600/10 text-blue-400 font-medium' 
-                : 'hover:bg-slate-800/50 hover:text-white'
+                ? 'bg-blue-50 text-blue-600 font-semibold' 
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
             }`}
             title={isSidebarCollapsed ? "任务管理" : undefined}
           >
@@ -227,11 +229,11 @@ export default function App() {
             {!isSidebarCollapsed && <span className="ml-3 whitespace-nowrap">任务管理</span>}
           </button>
         </nav>
-        <div className={`p-4 border-t border-slate-800/50 flex items-center ${isSidebarCollapsed ? 'justify-center flex-col space-y-2' : 'justify-between'}`}>
-          {!isSidebarCollapsed && <span className="text-xs text-slate-500">v1.0.0-beta</span>}
+        <div className={`p-4 border-t border-slate-200 flex items-center ${isSidebarCollapsed ? 'justify-center flex-col space-y-2' : 'justify-between'}`}>
+          {!isSidebarCollapsed && <span className="text-xs text-slate-400">v1.0.0-beta</span>}
           <button 
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="text-slate-500 hover:text-slate-300 transition-colors"
+            className="text-slate-400 hover:text-slate-600 transition-colors"
             title={isSidebarCollapsed ? "展开菜单" : "收起菜单"}
           >
             {isSidebarCollapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
@@ -261,10 +263,12 @@ interface Task {
   id: string;
   name: string;
   description: string;
+  type: string;
   enabled: boolean;
   frequency: string;
   time: string;
   lastRun: string;
+  nextRun: string;
   lastResult: string;
 }
 
@@ -272,6 +276,7 @@ interface TaskRecord {
   id: string;
   taskName: string;
   result: string;
+  summary: string;
   actualTime: string;
   duration: string;
   hasReport: boolean;
@@ -279,44 +284,45 @@ interface TaskRecord {
 
 // --- Mock Data for Tasks ---
 const MOCK_TASKS: Task[] = [
-  { id: 't1', name: '每日数据库巡检', description: '你是一个资深的数据库运维专家。请对核心业务数据库进行深度巡检。巡检内容必须包括：1. 当前活跃连接数是否接近上限；2. 过去24小时内的慢查询日志分析，找出执行时间最长的TOP 5 SQL；3. 检查主从同步延迟情况；4. 磁盘空间增长趋势预警。请以结构化的报告形式输出巡检结果，并对异常项给出具体的优化建议。', enabled: true, frequency: '每天', time: '02:00', lastRun: '2024-03-10 02:00:05', lastResult: 'success' },
-  { id: 't2', name: 'K8s 节点资源监控', description: '作为K8s集群管理员，请分析当前集群所有节点的资源消耗情况。重点关注：1. CPU和内存使用率超过80%的节点；2. 节点上的Pod分布是否均衡；3. 检查Kubelet和容器运行时的错误日志。请总结集群当前的健康状态，并识别出潜在的性能瓶颈。', enabled: true, frequency: '每小时', time: '每小时 05 分', lastRun: '2024-03-11 03:05:12', lastResult: 'success' },
-  { id: 't3', name: 'SSL 证书过期检查', description: '请扫描公司所有对外服务的域名SSL证书。要求：1. 提取每个证书的到期日期；2. 识别出有效期不足30天的证书；3. 检查证书链是否完整且安全。请列出所有需要更新的域名清单，并按紧急程度排序。', enabled: false, frequency: '每周', time: '周一 09:00', lastRun: '2024-03-04 09:00:22', lastResult: 'warning' },
-  { id: 't4', name: 'Redis 内存碎片清理', description: '定期检查 Redis 内存碎片率，必要时执行清理操作。', enabled: true, frequency: '每天', time: '04:00', lastRun: '2024-03-10 04:00:10', lastResult: 'success' },
-  { id: 't5', name: '日志清理任务', description: '自动清理 30 天前的系统日志，释放磁盘空间。', enabled: true, frequency: '每天', time: '01:00', lastRun: '2024-03-10 01:00:02', lastResult: 'success' },
-  { id: 't6', name: 'API 接口可用性拨测', description: '每 5 分钟对核心业务接口进行一次可用性探测。', enabled: true, frequency: '每小时', time: '每 5 分钟', lastRun: '2024-03-11 03:35:00', lastResult: 'success' },
-  { id: 't7', name: '备份文件完整性校验', description: '对异地备份的数据库文件进行 MD5 校验，确保备份可用。', enabled: true, frequency: '每周', time: '周日 03:00', lastRun: '2024-03-10 03:00:45', lastResult: 'success' },
-  { id: 't8', name: 'Nginx 错误日志分析', description: '分析 Nginx 错误日志，识别潜在的 5xx 错误并告警。', enabled: true, frequency: '每小时', time: '每小时 10 分', lastRun: '2024-03-11 03:10:05', lastResult: 'success' },
-  { id: 't9', name: '磁盘空间预警扫描', description: '扫描所有挂载点的磁盘使用情况，超过 85% 触发告警。', enabled: true, frequency: '每小时', time: '每小时 30 分', lastRun: '2024-03-11 03:30:15', lastResult: 'success' },
-  { id: 't10', name: '安全漏洞扫描', description: '对生产环境进行定期的安全漏洞扫描。', enabled: false, frequency: '每周', time: '周六 23:00', lastRun: '2024-03-09 23:00:00', lastResult: 'success' },
-  { id: 't11', name: '容器镜像更新检查', description: '检查基础镜像是否有安全更新，并生成更新建议。', enabled: true, frequency: '每周', time: '周三 10:00', lastRun: '2024-03-06 10:00:12', lastResult: 'success' },
-  { id: 't12', name: '网络延迟监控', description: '监控跨机房网络延迟，记录抖动情况。', enabled: true, frequency: '每小时', time: '每小时 15 分', lastRun: '2024-03-11 03:15:08', lastResult: 'success' },
-  { id: 't13', name: '僵尸进程清理', description: '扫描并清理系统中的僵尸进程。', enabled: true, frequency: '每天', time: '05:00', lastRun: '2024-03-10 05:00:03', lastResult: 'success' },
-  { id: 't14', name: '数据库索引分析', description: '分析数据库索引使用情况，建议删除冗余索引。', enabled: true, frequency: '每周', time: '周五 02:00', lastRun: '2024-03-08 02:00:15', lastResult: 'success' },
-  { id: 't15', name: '系统负载平衡检查', description: '评估集群负载平衡情况，建议扩缩容。', enabled: true, frequency: '每天', time: '08:00', lastRun: '2024-03-10 08:00:20', lastResult: 'success' }
+  { id: 't1', name: '每日数据库巡检', description: '你是一个资深的数据库运维专家。请对核心业务数据库进行深度巡检。巡检内容必须包括：1. 当前活跃连接数是否接近上限；2. 过去24小时内的慢查询日志分析，找出执行时间最长的TOP 5 SQL；3. 检查主从同步延迟情况；4. 磁盘空间增长趋势预警。请以结构化的报告形式输出巡检结果，并对异常项给出具体的优化建议。', type: '每周例行巡检', enabled: true, frequency: '每天', time: '02:00', lastRun: '2024-03-10 02:00:05', nextRun: '2024-03-11 02:00:00', lastResult: 'success' },
+  { id: 't2', name: 'K8s 节点资源监控', description: '作为K8s集群管理员，请分析当前集群所有节点的资源消耗情况。重点关注：1. CPU和内存使用率超过80%的节点；2. 节点上的Pod分布是否均衡；3. 检查Kubelet和容器运行时的错误日志。请总结集群当前的健康状态，并识别出潜在的性能瓶颈。', type: '高峰期巡检', enabled: true, frequency: '每小时', time: '每小时 05 分', lastRun: '2024-03-11 03:05:12', nextRun: '2024-03-11 04:05:00', lastResult: 'success' },
+  { id: 't3', name: 'SSL 证书过期检查', description: '请扫描公司所有对外服务的域名SSL证书。要求：1. 提取每个证书的到期日期；2. 识别出有效期不足30天的证书；3. 检查证书链是否完整且安全。请列出所有需要更新的域名清单，并按紧急程度排序。', type: '长期巡检', enabled: false, frequency: '每周', time: '周一 09:00', lastRun: '2024-03-04 09:00:22', nextRun: '2024-03-11 09:00:00', lastResult: 'failure' },
+  { id: 't4', name: 'Redis 内存碎片清理', description: '定期检查 Redis 内存碎片率，必要时执行清理操作。', type: '每周例行巡检', enabled: true, frequency: '每天', time: '04:00', lastRun: '2024-03-10 04:00:10', nextRun: '2024-03-11 04:00:00', lastResult: 'success' },
+  { id: 't5', name: '日志清理任务', description: '自动清理 30 天前的系统日志，释放磁盘空间。', type: '每周例行巡检', enabled: true, frequency: '每天', time: '01:00', lastRun: '2024-03-10 01:00:02', nextRun: '2024-03-11 01:00:00', lastResult: 'success' },
+  { id: 't6', name: 'API 接口可用性拨测', description: '每 5 分钟对核心业务接口进行一次可用性探测。', type: '高峰期巡检', enabled: true, frequency: '每小时', time: '每 5 分钟', lastRun: '2024-03-11 03:35:00', nextRun: '2024-03-11 03:40:00', lastResult: 'success' },
+  { id: 't7', name: '备份文件完整性校验', description: '对异地备份的数据库文件进行 MD5 校验，确保备份可用。', type: '长期巡检', enabled: true, frequency: '每周', time: '周日 03:00', lastRun: '2024-03-10 03:00:45', nextRun: '2024-03-17 03:00:00', lastResult: 'success' },
+  { id: 't8', name: 'Nginx 错误日志分析', description: '分析 Nginx 错误日志，识别潜在的 5xx 错误并告警。', type: '高峰期巡检', enabled: true, frequency: '每小时', time: '每小时 10 分', lastRun: '2024-03-11 03:10:05', nextRun: '2024-03-11 04:10:00', lastResult: 'success' },
+  { id: 't9', name: '磁盘空间预警扫描', description: '扫描所有挂载点的磁盘使用情况，超过 85% 触发告警。', type: '高峰期巡检', enabled: true, frequency: '每小时', time: '每小时 30 分', lastRun: '2024-03-11 03:30:15', nextRun: '2024-03-11 04:30:00', lastResult: 'success' },
+  { id: 't10', name: '安全漏洞扫描', description: '对生产环境进行定期的安全漏洞扫描。', type: '长期巡检', enabled: false, frequency: '每周', time: '周六 23:00', lastRun: '2024-03-09 23:00:00', nextRun: '2024-03-16 23:00:00', lastResult: 'success' },
+  { id: 't11', name: '容器镜像更新检查', description: '检查基础镜像是否有安全更新，并生成更新建议。', type: '每周例行巡检', enabled: true, frequency: '每周', time: '周三 10:00', lastRun: '2024-03-06 10:00:12', nextRun: '2024-03-13 10:00:00', lastResult: 'success' },
+  { id: 't12', name: '网络延迟监控', description: '监控跨机房网络延迟，记录抖动情况。', type: '高峰期巡检', enabled: true, frequency: '每小时', time: '每小时 15 分', lastRun: '2024-03-11 03:15:08', nextRun: '2024-03-11 04:15:00', lastResult: 'success' },
+  { id: 't13', name: '僵尸进程清理', description: '扫描并清理系统中的僵尸进程。', type: '每周例行巡检', enabled: true, frequency: '每天', time: '05:00', lastRun: '2024-03-10 05:00:03', nextRun: '2024-03-11 05:00:00', lastResult: 'success' },
+  { id: 't14', name: '数据库索引分析', description: '分析数据库索引使用情况，建议删除冗余索引。', type: '每周例行巡检', enabled: true, frequency: '每周', time: '周五 02:00', lastRun: '2024-03-08 02:00:15', nextRun: '2024-03-15 02:00:00', lastResult: 'success' },
+  { id: 't15', name: '系统负载平衡检查', description: '评估集群负载平衡情况，建议扩缩容。', type: '每周例行巡检', enabled: true, frequency: '每天', time: '08:00', lastRun: '2024-03-10 08:00:20', nextRun: '2024-03-11 08:00:00', lastResult: 'success' }
 ];
 
 const MOCK_TASK_RECORDS = [
-  { id: 'r1', taskName: '每日数据库巡检', result: 'success', actualTime: '2024-03-10 02:00:05', duration: '45s', hasReport: true },
-  { id: 'r2', taskName: 'K8s 节点资源监控', result: 'success', actualTime: '2024-03-11 03:05:12', duration: '12s', hasReport: true },
-  { id: 'r3', taskName: '每日数据库巡检', result: 'failure', actualTime: '2024-03-09 02:00:08', duration: '30s', hasReport: false },
-  { id: 'r4', taskName: 'Redis 内存碎片清理', result: 'success', actualTime: '2024-03-10 04:00:10', duration: '1m 20s', hasReport: true },
-  { id: 'r5', taskName: '日志清理任务', result: 'success', actualTime: '2024-03-10 01:00:02', duration: '5m 12s', hasReport: true },
-  { id: 'r6', taskName: 'API 接口可用性拨测', result: 'success', actualTime: '2024-03-11 03:35:00', duration: '2s', hasReport: true },
-  { id: 'r7', taskName: '备份文件完整性校验', result: 'success', actualTime: '2024-03-10 03:00:45', duration: '15m 30s', hasReport: true },
-  { id: 'r8', taskName: 'Nginx 错误日志分析', result: 'success', actualTime: '2024-03-11 03:10:05', duration: '1m 45s', hasReport: true },
-  { id: 'r9', taskName: '磁盘空间预警扫描', result: 'success', actualTime: '2024-03-11 03:30:15', duration: '35s', hasReport: true },
-  { id: 'r10', taskName: '每日数据库巡检', result: 'success', actualTime: '2024-03-08 02:00:04', duration: '42s', hasReport: true },
-  { id: 'r11', taskName: 'K8s 节点资源监控', result: 'success', actualTime: '2024-03-11 02:05:10', duration: '11s', hasReport: true },
-  { id: 'r12', taskName: 'API 接口可用性拨测', result: 'success', actualTime: '2024-03-11 03:30:00', duration: '2s', hasReport: true },
-  { id: 'r13', taskName: '僵尸进程清理', result: 'success', actualTime: '2024-03-10 05:00:03', duration: '5s', hasReport: true },
-  { id: 'r14', taskName: '数据库索引分析', result: 'success', actualTime: '2024-03-08 02:00:15', duration: '3m 10s', hasReport: true },
-  { id: 'r15', taskName: '系统负载平衡检查', result: 'success', actualTime: '2024-03-10 08:00:20', duration: '1m 05s', hasReport: true }
+  { id: 'r1', taskName: '每日数据库巡检', result: 'success', summary: '100% 健康', actualTime: '2024-03-10 02:00:05', duration: '45s', hasReport: true },
+  { id: 'r2', taskName: 'K8s 节点资源监控', result: 'success', summary: '发现 2 个潜在风险', actualTime: '2024-03-11 03:05:12', duration: '12s', hasReport: true },
+  { id: 'r3', taskName: '每日数据库巡检', result: 'failure', summary: '连接超时', actualTime: '2024-03-09 02:00:08', duration: '30s', hasReport: false },
+  { id: 'r4', taskName: 'Redis 内存碎片清理', result: 'success', summary: '清理 256MB 空间', actualTime: '2024-03-10 04:00:10', duration: '1m 20s', hasReport: true },
+  { id: 'r5', taskName: '日志清理任务', result: 'success', summary: '释放 1.2GB 磁盘', actualTime: '2024-03-10 01:00:02', duration: '5m 12s', hasReport: true },
+  { id: 'r6', taskName: 'API 接口可用性拨测', result: 'success', summary: '响应时间正常', actualTime: '2024-03-11 03:35:00', duration: '2s', hasReport: true },
+  { id: 'r7', taskName: '备份文件完整性校验', result: 'success', summary: '校验通过', actualTime: '2024-03-10 03:00:45', duration: '15m 30s', hasReport: true },
+  { id: 'r8', taskName: 'Nginx 错误日志分析', result: 'success', summary: '无严重错误', actualTime: '2024-03-11 03:10:05', duration: '1m 45s', hasReport: true },
+  { id: 'r9', taskName: '磁盘空间预警扫描', result: 'success', summary: '空间充足', actualTime: '2024-03-11 03:30:15', duration: '35s', hasReport: true },
+  { id: 'r10', taskName: '每日数据库巡检', result: 'success', summary: '100% 健康', actualTime: '2024-03-08 02:00:04', duration: '42s', hasReport: true },
+  { id: 'r11', taskName: 'K8s 节点资源监控', result: 'success', summary: '负载均衡', actualTime: '2024-03-11 02:05:10', duration: '11s', hasReport: true },
+  { id: 'r12', taskName: 'API 接口可用性拨测', result: 'success', summary: '响应时间正常', actualTime: '2024-03-11 03:30:00', duration: '2s', hasReport: true },
+  { id: 'r13', taskName: '僵尸进程清理', result: 'success', summary: '清理 0 个进程', actualTime: '2024-03-10 05:00:03', duration: '5s', hasReport: true },
+  { id: 'r14', taskName: '数据库索引分析', result: 'success', summary: '建议优化 3 个索引', actualTime: '2024-03-08 02:00:15', duration: '3m 10s', hasReport: true },
+  { id: 'r15', taskName: '系统负载平衡检查', result: 'success', summary: '运行平稳', actualTime: '2024-03-10 08:00:20', duration: '1m 05s', hasReport: true }
 ];
 
 function TaskManagementView() {
   const [activeTab, setActiveTab] = useState<'list' | 'records'>('list');
   const [tasks, setTasks] = useState<Task[]>(MOCK_TASKS);
+  const [records, setRecords] = useState<TaskRecord[]>(MOCK_TASK_RECORDS);
   
   // Drawer states
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -331,7 +337,6 @@ function TaskManagementView() {
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
-  const [frequencyFilter, setFrequencyFilter] = useState('all');
   const [resultFilter, setResultFilter] = useState('all');
 
   // Pagination states
@@ -349,17 +354,18 @@ function TaskManagementView() {
     const matchesStatus = statusFilter === 'all' || 
                           (statusFilter === 'enabled' && task.enabled) || 
                           (statusFilter === 'disabled' && !task.enabled);
-    const matchesFrequency = frequencyFilter === 'all' || task.frequency === frequencyFilter;
     const matchesResult = resultFilter === 'all' || task.lastResult === resultFilter;
     
-    return matchesSearch && matchesStatus && matchesFrequency && matchesResult;
+    return matchesSearch && matchesStatus && matchesResult;
   });
 
   const paginatedTasks = filteredTasks.slice((listPage - 1) * pageSize, listPage * pageSize);
   const totalListPages = Math.ceil(filteredTasks.length / pageSize);
 
-  const filteredRecords = MOCK_TASK_RECORDS.filter(record => {
-    const matchesSearch = record.taskName.toLowerCase().includes(recordSearchTerm.toLowerCase());
+  const uniqueTaskNames = Array.from(new Set(tasks.map(t => t.name)));
+
+  const filteredRecords = records.filter(record => {
+    const matchesSearch = recordSearchTerm === '' || record.taskName === recordSearchTerm;
     const matchesResult = recordResultFilter === 'all' || record.result === recordResultFilter;
     return matchesSearch && matchesResult;
   });
@@ -370,7 +376,7 @@ function TaskManagementView() {
   // Reset page when filters change
   useEffect(() => {
     setListPage(1);
-  }, [searchTerm, statusFilter, frequencyFilter, resultFilter]);
+  }, [searchTerm, statusFilter, resultFilter]);
 
   useEffect(() => {
     setRecordsPage(1);
@@ -414,6 +420,32 @@ function TaskManagementView() {
 
   const handleViewHistory = (taskName: string) => {
     setRecordSearchTerm(taskName);
+    setRecordResultFilter('all');
+    setActiveTab('records');
+  };
+
+  const handleTriggerNow = (task: Task) => {
+    // Create a new record
+    const now = new Date();
+    const formattedTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    
+    const newRecord: TaskRecord = {
+      id: `r${Date.now()}`,
+      taskName: task.name,
+      result: 'success',
+      summary: '手动触发执行成功',
+      actualTime: formattedTime,
+      duration: '2s',
+      hasReport: true
+    };
+    
+    setRecords([newRecord, ...records]);
+    
+    // Also update the task's last run time in the list
+    setTasks(tasks.map(t => t.id === task.id ? { ...t, lastRun: formattedTime, lastResult: 'success' } : t));
+    
+    // Filter records to show this task's history and jump to records tab
+    setRecordSearchTerm(task.name);
     setRecordResultFilter('all');
     setActiveTab('records');
   };
@@ -510,33 +542,20 @@ function TaskManagementView() {
                 </select>
 
                 <select 
-                  value={frequencyFilter}
-                  onChange={(e) => setFrequencyFilter(e.target.value)}
-                  className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                >
-                  <option value="all">全部频率</option>
-                  <option value="每天">每天</option>
-                  <option value="每小时">每小时</option>
-                  <option value="每周">每周</option>
-                </select>
-
-                <select 
                   value={resultFilter}
                   onChange={(e) => setResultFilter(e.target.value)}
                   className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 >
                   <option value="all">全部结果</option>
                   <option value="success">成功</option>
-                  <option value="warning">警告</option>
                   <option value="failure">失败</option>
                 </select>
                 
-                {(searchTerm || statusFilter !== 'all' || frequencyFilter !== 'all' || resultFilter !== 'all') && (
+                {(searchTerm || statusFilter !== 'all' || resultFilter !== 'all') && (
                   <button 
                     onClick={() => {
                       setSearchTerm('');
                       setStatusFilter('all');
-                      setFrequencyFilter('all');
                       setResultFilter('all');
                     }}
                     className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2"
@@ -553,10 +572,11 @@ function TaskManagementView() {
                   <tr className="bg-slate-50/50 border-b border-slate-200">
                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">任务名称</th>
                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">任务描述</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">任务类型</th>
                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">任务开关</th>
-                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">执行频率</th>
-                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">执行时间</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">执行频率/时间</th>
                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">上次执行时间</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">下次执行时间</th>
                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">上次执行结果</th>
                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">操作</th>
                   </tr>
@@ -571,30 +591,42 @@ function TaskManagementView() {
                         <div className="text-sm text-slate-500 max-w-xs truncate" title={task.description}>{task.description}</div>
                       </td>
                       <td className="px-6 py-4">
+                        <div className="text-sm text-slate-600">{task.type}</div>
+                      </td>
+                      <td className="px-6 py-4">
                         <button className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${task.enabled ? 'bg-blue-600' : 'bg-slate-200'}`}>
                           <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${task.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                         </button>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm text-slate-600">{task.frequency}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-slate-600">{task.time}</div>
+                        <div className="text-sm text-slate-600">
+                          <div>{task.frequency}</div>
+                          <div className="text-xs text-slate-400 mt-0.5">{task.time}</div>
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-slate-500 font-mono">{task.lastRun}</div>
                       </td>
                       <td className="px-6 py-4">
+                        <div className="text-sm text-slate-500 font-mono">{task.nextRun}</div>
+                      </td>
+                      <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          task.lastResult === 'success' ? 'bg-emerald-100 text-emerald-700' : 
-                          task.lastResult === 'warning' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
+                          task.lastResult === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
                         }`}>
                           {task.lastResult === 'success' ? <CheckCircle className="w-3 h-3 mr-1" /> : <AlertCircle className="w-3 h-3 mr-1" />}
-                          {task.lastResult === 'success' ? '成功' : task.lastResult === 'warning' ? '警告' : '失败'}
+                          {task.lastResult === 'success' ? '成功' : '失败'}
                         </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center space-x-3">
+                          <button 
+                            onClick={() => handleTriggerNow(task)}
+                            className="p-1 text-slate-400 hover:text-emerald-600 transition-colors" 
+                            title="立即触发"
+                          >
+                            <Play className="w-4 h-4" />
+                          </button>
                           <button 
                             onClick={() => handleViewDetails(task)}
                             className="p-1 text-slate-400 hover:text-blue-600 transition-colors" 
@@ -674,14 +706,17 @@ function TaskManagementView() {
             {/* Records Filters */}
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-wrap items-center gap-4">
               <div className="relative flex-1 min-w-[240px]">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="搜索任务名称..." 
+                <select 
                   value={recordSearchTerm}
                   onChange={(e) => setRecordSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 rounded-lg text-sm transition-all outline-none"
-                />
+                  className="w-full px-4 py-2 bg-white border border-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 rounded-lg text-sm transition-all outline-none appearance-none"
+                >
+                  <option value="">任务名称: 全部</option>
+                  {uniqueTaskNames.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
               </div>
               
               <div className="flex items-center gap-2">
@@ -719,6 +754,7 @@ function TaskManagementView() {
                   <tr className="bg-slate-50/50 border-b border-slate-200">
                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">任务名称</th>
                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">执行结果</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">巡检结果</th>
                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">实际执行时间</th>
                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">巡检时长</th>
                     <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">是否生成报告</th>
@@ -738,6 +774,17 @@ function TaskManagementView() {
                         {record.result === 'success' ? <CheckCircle className="w-3 h-3 mr-1" /> : <AlertCircle className="w-3 h-3 mr-1" />}
                         {record.result === 'success' ? '成功' : '失败'}
                       </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className={`text-sm font-medium ${
+                        record.result === 'failure' || record.summary.includes('超时') || record.summary.includes('失败') 
+                          ? 'text-rose-600' 
+                          : record.summary.includes('风险') || record.summary.includes('潜在') || record.summary.includes('警告') || record.summary.includes('优化')
+                          ? 'text-amber-600'
+                          : 'text-emerald-600'
+                      }`}>
+                        {record.summary}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-slate-500 font-mono">{record.actualTime}</div>
@@ -837,6 +884,17 @@ function TaskDrawer({
   onSave: (task: Task) => void;
 }) {
   const [editedTask, setEditedTask] = useState<Task | null>(null);
+  const [schedulingMode, setSchedulingMode] = useState<'picker' | 'natural'>('picker');
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState<number>(1);
+  const [customConfig, setCustomConfig] = useState<{
+    months: number[],
+    days: string[],
+    dates: number[]
+  }>({ months: [], days: [], dates: [] });
+  const [showDescPreview, setShowDescPreview] = useState(false);
+  const [naturalInput, setNaturalInput] = useState('');
+  const [isConverting, setIsConverting] = useState(false);
 
   useEffect(() => {
     if (isCreateMode) {
@@ -844,23 +902,119 @@ function TaskDrawer({
         id: '',
         name: '',
         description: '',
+        type: '每周例行巡检',
         enabled: true,
         frequency: '每天',
         time: '00:00',
         lastRun: '-',
+        nextRun: '-',
         lastResult: 'pending'
       });
+      setSchedulingMode('picker');
+      setSelectedDays([]);
     } else {
       setEditedTask(task);
+      // Try to guess mode from existing data
+      if (task?.frequency === '每周' && task.time.includes('周')) {
+        setSchedulingMode('picker');
+        // Parse days if possible, e.g. "周二, 周五 00:00"
+      }
     }
   }, [task, isCreateMode]);
+
+  const toggleDay = (day: string) => {
+    const newDays = selectedDays.includes(day) 
+      ? selectedDays.filter(d => d !== day)
+      : [...selectedDays, day];
+    setSelectedDays(newDays);
+    
+    if (editedTask) {
+      const timePart = editedTask.time.split(' ').pop() || '00:00';
+      if (editedTask.frequency === '每周') {
+        const daysStr = newDays.sort().join(', ');
+        setEditedTask({
+          ...editedTask,
+          time: daysStr ? `${daysStr} ${timePart}` : timePart
+        });
+      }
+    }
+  };
+
+  const getSchedulePreview = () => {
+    if (!editedTask || schedulingMode === 'natural') return '';
+    const time = editedTask.time.split(' ').pop() || '00:00';
+    
+    if (editedTask.frequency === '每天') {
+      return `任务将于：每天 ${time} 自动触发`;
+    }
+    if (editedTask.frequency === '每周') {
+      const days = selectedDays.length > 0 ? selectedDays.sort().join('、') : '未选择';
+      return `任务将于：每周的 ${days} ${time} 自动触发`;
+    }
+    if (editedTask.frequency === '每月') {
+      return `任务将于：每月的 ${selectedDate}号 ${time} 自动触发 (若当月无此日期则跳过)`;
+    }
+    if (editedTask.frequency === '自定义') {
+      const parts = [];
+      if (customConfig.months.length > 0) parts.push(`${customConfig.months.sort((a,b) => a-b).join(',')}月`);
+      if (customConfig.dates.length > 0) parts.push(`${customConfig.dates.sort((a,b) => a-b).join(',')}号`);
+      if (customConfig.days.length > 0) parts.push(`每周${customConfig.days.join(',')}`);
+      const desc = parts.length > 0 ? parts.join(' ') : '未配置组合';
+      return `任务将于：${desc} ${time} 自动触发`;
+    }
+    return '';
+  };
+
+  const handleConvertSchedule = async () => {
+    if (!naturalInput.trim()) return;
+    
+    setIsConverting(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `你是一个调度助手。请将以下关于任务调度周期的自然语言描述转换为结构化的 JSON 格式。
+输出必须是一个合法的 JSON 对象，包含以下字段：
+- frequency: '每天' | '每周' | '每月' | '自定义'
+- time: 字符串 (格式如 'HH:mm'，如果是每周/每月/自定义，可能包含前缀如 '周一, 周二 09:00' 或 '15号 10:00')
+- selectedDays: 字符串数组 (例如 ['周一', '周二'])
+- selectedDate: 数字 (1-31)
+- customConfig: 对象 { months: 数字数组, days: 字符串数组, dates: 数字数组 }
+
+自然语言描述："${naturalInput}"`,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+
+      const result = JSON.parse(response.text);
+      
+      if (editedTask) {
+        setEditedTask({
+          ...editedTask,
+          frequency: result.frequency || '每天',
+          time: result.time || '00:00'
+        });
+        if (result.selectedDays) setSelectedDays(result.selectedDays);
+        if (result.selectedDate) setSelectedDate(result.selectedDate);
+        if (result.customConfig) setCustomConfig(result.customConfig);
+        
+        setSchedulingMode('picker');
+      }
+    } catch (error) {
+      console.error('Schedule conversion error:', error);
+      alert('转换失败，请检查输入或重试');
+    } finally {
+      setIsConverting(false);
+    }
+  };
 
   if (!isOpen || !editedTask) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose} />
-      <div className="absolute inset-y-0 right-0 w-full max-w-lg bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out translate-x-0">
+      <div className="absolute inset-y-0 right-0 w-[60%] bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out translate-x-0">
         <div className="h-16 border-b border-slate-200 flex items-center justify-between px-6 flex-shrink-0">
           <h2 className="text-lg font-semibold text-slate-800">
             {isCreateMode ? '新建任务' : isEditMode ? '修改任务' : '任务详情'}
@@ -887,65 +1041,293 @@ function TaskDrawer({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">任务描述</label>
+            <label className="text-sm font-medium text-slate-700">任务类型</label>
             {isEditMode ? (
-              <textarea 
-                rows={8}
-                placeholder="请详细描述任务的执行逻辑或巡检指令..."
-                value={editedTask.description}
-                onChange={(e) => setEditedTask({...editedTask, description: e.target.value})}
-                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all resize-none text-sm leading-relaxed"
-              />
+              <select 
+                value={editedTask.type}
+                onChange={(e) => setEditedTask({...editedTask, type: e.target.value})}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all bg-white"
+              >
+                <option value="每周例行巡检">每周例行巡检</option>
+                <option value="高峰期巡检">高峰期巡检</option>
+                <option value="长期巡检">长期巡检</option>
+              </select>
             ) : (
-              <div className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-lg text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">{editedTask.description}</div>
+              <div className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-lg text-slate-900 font-medium">{editedTask.type}</div>
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">执行频率</label>
-              {isEditMode ? (
-                <select 
-                  value={editedTask.frequency}
-                  onChange={(e) => setEditedTask({...editedTask, frequency: e.target.value})}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-slate-700">任务描述 (Markdown)</label>
+              {isEditMode && (
+                <button 
+                  onClick={() => setShowDescPreview(!showDescPreview)}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center"
                 >
-                  <option value="每天">每天</option>
-                  <option value="每小时">每小时</option>
-                  <option value="每周">每周</option>
-                </select>
-              ) : (
-                <div className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-lg text-slate-600">{editedTask.frequency}</div>
+                  {showDescPreview ? (
+                    <><Edit2 className="w-3 h-3 mr-1" /> 编辑模式</>
+                  ) : (
+                    <><Eye className="w-3 h-3 mr-1" /> 预览模式</>
+                  )}
+                </button>
               )}
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">执行时间</label>
-              {isEditMode ? (
-                <input 
-                  type="text" 
-                  placeholder="例如：02:00 或 每 5 分钟"
-                  value={editedTask.time}
-                  onChange={(e) => setEditedTask({...editedTask, time: e.target.value})}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+            {isEditMode ? (
+              showDescPreview ? (
+                <div className="w-full px-4 py-3 border border-slate-200 rounded-lg bg-slate-50 min-h-[400px] overflow-y-auto markdown-body prose prose-slate prose-sm max-w-none">
+                  <Markdown>{editedTask.description || '*暂无描述*'}</Markdown>
+                </div>
+              ) : (
+                <textarea 
+                  rows={16}
+                  placeholder={`请详细描述任务的执行逻辑或巡检指令。支持 Markdown 格式。
+
+### 示例（Prompt 模式）：
+你是一个资深的 **AIOps 专家**，请执行以下巡检任务：
+
+1. **登录目标机器**：\`10.0.x.x\` (生产环境核心网关)。
+2. **凭据获取**：请从安全中心（Vault）获取名为 \`ops_readonly\` 的临时账号密码。
+3. **巡检目标**：检查 Nginx 服务的连接数、内存占用以及最近 5 分钟的错误日志。
+4. **逻辑要求**：
+   - 如果连接数 > 5000
+   - 或错误日志中出现 "Critical" 关键字
+   - 则总结异常原因并给出修复建议。
+5. **输出**：请以结构化的 Markdown 报告形式输出巡检结果。`}
+                  value={editedTask.description}
+                  onChange={(e) => setEditedTask({...editedTask, description: e.target.value})}
+                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all resize-none text-sm font-mono leading-relaxed"
                 />
-              ) : (
-                <div className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-lg text-slate-600">{editedTask.time}</div>
-              )}
-            </div>
+              )
+            ) : (
+              <div className="px-4 py-3 bg-slate-50 border border-slate-100 rounded-lg text-slate-600 text-sm leading-relaxed markdown-body prose prose-slate prose-sm max-w-none">
+                <Markdown>{editedTask.description || '*暂无描述*'}</Markdown>
+              </div>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">任务状态</label>
-            <div className="flex items-center space-x-3">
-              <button 
-                disabled={!isEditMode}
-                onClick={() => setEditedTask({...editedTask, enabled: !editedTask.enabled})}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${editedTask.enabled ? 'bg-blue-600' : 'bg-slate-200'} ${!isEditMode && 'opacity-70 cursor-not-allowed'}`}
-              >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editedTask.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
-              </button>
-              <span className="text-sm text-slate-600">{editedTask.enabled ? '已开启' : '已关闭'}</span>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-slate-700">调度配置</label>
+              {isEditMode && (
+                <div className="flex bg-slate-100 p-1 rounded-lg">
+                  <button 
+                    onClick={() => setSchedulingMode('picker')}
+                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${schedulingMode === 'picker' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    选择器
+                  </button>
+                  <button 
+                    onClick={() => setSchedulingMode('natural')}
+                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${schedulingMode === 'natural' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    自然语言
+                  </button>
+                </div>
+              )}
             </div>
+
+            {schedulingMode === 'picker' ? (
+              <div className="space-y-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">执行频率</label>
+                    {isEditMode ? (
+                      <select 
+                        value={editedTask.frequency}
+                        onChange={(e) => {
+                          const freq = e.target.value;
+                          setEditedTask({...editedTask, frequency: freq});
+                          // Reset time string based on frequency
+                          const timePart = editedTask.time.split(' ').pop() || '00:00';
+                          if (freq === '每天') setEditedTask({...editedTask, frequency: freq, time: timePart});
+                          if (freq === '每周') setEditedTask({...editedTask, frequency: freq, time: selectedDays.length > 0 ? `${selectedDays.sort().join(', ')} ${timePart}` : timePart});
+                          if (freq === '每月') setEditedTask({...editedTask, frequency: freq, time: `${selectedDate}号 ${timePart}`});
+                        }}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                      >
+                        <option value="每天">每天</option>
+                        <option value="每周">每周</option>
+                        <option value="每月">每月</option>
+                        <option value="自定义">自定义</option>
+                      </select>
+                    ) : (
+                      <div className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm">{editedTask.frequency}</div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">具体时间</label>
+                    {isEditMode ? (
+                      <input 
+                        type="time" 
+                        value={editedTask.time.split(' ').pop()?.includes(':') ? editedTask.time.split(' ').pop() : '00:00'}
+                        onChange={(e) => {
+                          const timeVal = e.target.value;
+                          if (editedTask.frequency === '每周' && selectedDays.length > 0) {
+                            setEditedTask({...editedTask, time: `${selectedDays.sort().join(', ')} ${timeVal}`});
+                          } else if (editedTask.frequency === '每月') {
+                            setEditedTask({...editedTask, time: `${selectedDate}号 ${timeVal}`});
+                          } else {
+                            setEditedTask({...editedTask, time: timeVal});
+                          }
+                        }}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                      />
+                    ) : (
+                      <div className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm">{editedTask.time}</div>
+                    )}
+                  </div>
+                </div>
+
+                {editedTask.frequency === '每周' && isEditMode && (
+                  <div className="space-y-2 pt-2 border-t border-slate-200/50">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">选择周几</label>
+                    <div className="flex flex-wrap gap-2">
+                      {['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map(day => (
+                        <button
+                          key={day}
+                          onClick={() => toggleDay(day)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                            selectedDays.includes(day) 
+                              ? 'bg-blue-600 border-blue-600 text-white shadow-sm' 
+                              : 'bg-white border-slate-200 text-slate-600 hover:border-blue-400'
+                          }`}
+                        >
+                          {day}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {editedTask.frequency === '每月' && isEditMode && (
+                  <div className="space-y-2 pt-2 border-t border-slate-200/50">
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">日期选择</label>
+                    <div className="flex items-center space-x-3">
+                      <select 
+                        value={selectedDate}
+                        onChange={(e) => {
+                          const date = parseInt(e.target.value);
+                          setSelectedDate(date);
+                          const timePart = editedTask.time.split(' ').pop() || '00:00';
+                          setEditedTask({...editedTask, time: `${date}号 ${timePart}`});
+                        }}
+                        className="w-32 px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                      >
+                        {Array.from({length: 31}, (_, i) => i + 1).map(d => (
+                          <option key={d} value={d}>{d}号</option>
+                        ))}
+                      </select>
+                      <span className="text-xs text-slate-400 italic">若当月无此日期则跳过</span>
+                    </div>
+                  </div>
+                )}
+
+                {editedTask.frequency === '自定义' && isEditMode && (
+                  <div className="space-y-4 pt-2 border-t border-slate-200/50">
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">月份组合</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {Array.from({length: 12}, (_, i) => i + 1).map(m => (
+                          <button
+                            key={m}
+                            onClick={() => {
+                              const newMonths = customConfig.months.includes(m) 
+                                ? customConfig.months.filter(x => x !== m) 
+                                : [...customConfig.months, m];
+                              setCustomConfig({...customConfig, months: newMonths});
+                            }}
+                            className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-medium transition-all border ${
+                              customConfig.months.includes(m) 
+                                ? 'bg-blue-600 border-blue-600 text-white' 
+                                : 'bg-white border-slate-200 text-slate-600'
+                            }`}
+                          >
+                            {m}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">日期组合</label>
+                        <select 
+                          multiple
+                          className="w-full h-24 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs outline-none"
+                          value={customConfig.dates.map(String)}
+                          onChange={(e) => {
+                            const values = Array.from(e.target.selectedOptions, option => parseInt(option.value));
+                            setCustomConfig({...customConfig, dates: values});
+                          }}
+                        >
+                          {Array.from({length: 31}, (_, i) => i + 1).map(d => (
+                            <option key={d} value={d}>{d}号</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">星期组合</label>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map(day => (
+                            <button
+                              key={day}
+                              onClick={() => {
+                                const newDays = customConfig.days.includes(day) 
+                                  ? customConfig.days.filter(x => x !== day) 
+                                  : [...customConfig.days, day];
+                                setCustomConfig({...customConfig, days: newDays});
+                              }}
+                              className={`px-2 py-1 rounded-lg text-[10px] font-medium transition-all border ${
+                                customConfig.days.includes(day) 
+                                  ? 'bg-blue-600 border-blue-600 text-white' 
+                                  : 'bg-white border-slate-200 text-slate-600'
+                              }`}
+                            >
+                              {day}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {getSchedulePreview() && (
+                  <div className="pt-2 border-t border-slate-200/50">
+                    <p className="text-[11px] text-slate-400 italic">{getSchedulePreview()}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-3">
+                {isEditMode ? (
+                  <>
+                    <textarea 
+                      rows={3}
+                      placeholder="例如：在每周一、周四晚上9点进行巡检"
+                      value={naturalInput}
+                      onChange={(e) => setNaturalInput(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm resize-none"
+                    />
+                    <div className="flex justify-end">
+                      <button 
+                        onClick={handleConvertSchedule}
+                        disabled={isConverting || !naturalInput.trim()}
+                        className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-xs font-medium rounded-lg transition-all shadow-sm"
+                      >
+                        {isConverting ? (
+                          <><Loader2 className="w-3 h-3 mr-2 animate-spin" /> 正在转换...</>
+                        ) : (
+                          <><Sparkles className="w-3 h-3 mr-2" /> 大模型转换</>
+                        )}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm min-h-[80px]">{editedTask.time}</div>
+                )}
+              </div>
+            )}
           </div>
 
           {!isEditMode && (
